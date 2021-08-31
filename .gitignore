@@ -1,0 +1,9 @@
+.git/
+.env
+
+venv/
+
+/.enw/
+/.idea/
+*__pycache__*
+*.db
