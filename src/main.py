@@ -1,24 +1,42 @@
 import datetime as dt
-from fastapi import FastAPI, HTTPException, Query
-from database import engine, Session, Base, City, User, Picnic, PicnicRegistration
+
+from fastapi import Depends, FastAPI, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from database import engine, SessionLocal, Base
 from external_requests import CheckCityExisting, GetWeatherRequest
-from models import RegisterUserRequest, UserModel
+import models
+import schemas
+from schemas import RegisterUserRequest, UserModel
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
 
-@app.get('/create-city/', summary='Create City', description='Создание города по его названию')
-def create_city(city: str = Query(description="Название города", default=None)):
-    if city is None:
-        raise HTTPException(status_code=400, detail='Параметр city должен быть указан')
-    check = CheckCityExisting()
-    if not check.check_existing(city):
-        raise HTTPException(status_code=400, detail='Параметр city должен быть существующим городом')
+# Dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-    city_object = Session().query(City).filter(City.name == city.capitalize()).first()
+
+@app.post('/cities/', summary='Create City', response_model=schemas.City,
+          description='Создание города по его названию', tags=['city'])
+def create_city(city: schemas.CityCreate, db: Session = Depends(get_db)):
+    check = CheckCityExisting()
+    if not check.check_existing(city.name):
+        raise HTTPException(
+            status_code=400,
+            detail='Параметр city должен быть существующим городом')
+
+    city_object = db.query(models.City).filter(
+        models.City.name == city.name).first()
     if city_object is None:
-        city_object = City(name=city.capitalize())
-        s = Session()
+        city_object = models.City(name=city.name)
+        s = db
         s.add(city_object)
         s.commit()
 
@@ -30,7 +48,7 @@ def cities_list(q: str = Query(description="Название города", defa
     """
     Получение списка городов
     """
-    cities = Session().query(City).all()
+    cities = db.query(City).all()
 
     return [{'id': city.id, 'name': city.name, 'weather': city.weather} for city in cities]
 
@@ -40,7 +58,7 @@ def users_list():
     """
     Список пользователей
     """
-    users = Session().query(User).all()
+    users = db.query(User).all()
     return [{
         'id': user.id,
         'name': user.name,
@@ -55,7 +73,7 @@ def register_user(user: RegisterUserRequest):
     Регистрация пользователя
     """
     user_object = User(**user.dict())
-    s = Session()
+    s = db
     s.add(user_object)
     s.commit()
 
@@ -68,7 +86,7 @@ def all_picnics(datetime: dt.datetime = Query(default=None, description='Вре�
     """
     Список всех пикников
     """
-    picnics = Session().query(Picnic)
+    picnics = db.query(Picnic)
     if datetime is not None:
         picnics = picnics.filter(Picnic.time == datetime)
     if not past:
@@ -76,7 +94,7 @@ def all_picnics(datetime: dt.datetime = Query(default=None, description='Вре�
 
     return [{
         'id': pic.id,
-        'city': Session().query(City).filter(City.id == pic.id).first().name,
+        'city': db.query(City).filter(City.id == pic.id).first().name,
         'time': pic.time,
         'users': [
             {
@@ -85,20 +103,20 @@ def all_picnics(datetime: dt.datetime = Query(default=None, description='Вре�
                 'surname': pr.user.surname,
                 'age': pr.user.age,
             }
-            for pr in Session().query(PicnicRegistration).filter(PicnicRegistration.picnic_id == pic.id)],
+            for pr in db.query(PicnicRegistration).filter(PicnicRegistration.picnic_id == pic.id)],
     } for pic in picnics]
 
 
 @app.get('/picnic-add/', summary='Picnic Add', tags=['picnic'])
 def picnic_add(city_id: int = None, datetime: dt.datetime = None):
     p = Picnic(city_id=city_id, time=datetime)
-    s = Session()
+    s = db
     s.add(p)
     s.commit()
 
     return {
         'id': p.id,
-        'city': Session().query(City).filter(City.id == p.id).first().name,
+        'city': db.query(City).filter(City.id == p.id).first().name,
         'time': p.time,
     }
 
