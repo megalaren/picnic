@@ -2,6 +2,7 @@ import datetime as dt
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy.orm import Session
+from typing import List
 
 from database import engine, SessionLocal, Base
 from external_requests import CheckCityExisting, GetWeatherRequest
@@ -23,9 +24,12 @@ def get_db():
         db.close()
 
 
-@app.post('/cities/', summary='Create City', response_model=schemas.City,
-          description='Создание города по его названию', tags=['city'])
+@app.post('/cities/', response_model=schemas.City, summary='Create City',
+          tags=['city'])
 def create_city(city: schemas.CityCreate, db: Session = Depends(get_db)):
+    """
+    Создание города по его названию
+    """
     check = CheckCityExisting()
     if not check.check_existing(city.name):
         raise HTTPException(
@@ -40,17 +44,20 @@ def create_city(city: schemas.CityCreate, db: Session = Depends(get_db)):
         s.add(city_object)
         s.commit()
 
-    return {'id': city_object.id, 'name': city_object.name, 'weather': city_object.weather}
+    return city_object
 
 
-@app.post('/get-cities/', summary='Get Cities')
-def cities_list(q: str = Query(description="Название города", default=None)):
+@app.get('/cities/', response_model=List[schemas.City], summary='Get Cities',
+         tags=['city'])
+def read_cities(db: Session = Depends(get_db),
+                q: str = Query(description='Название города', default=None)):
     """
     Получение списка городов
     """
-    cities = db.query(City).all()
-
-    return [{'id': city.id, 'name': city.name, 'weather': city.weather} for city in cities]
+    cities = db.query(models.City)
+    if q:
+        cities = cities.filter(models.City.name == q)
+    return cities.all()
 
 
 @app.post('/users-list/', summary='')
