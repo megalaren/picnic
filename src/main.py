@@ -1,14 +1,13 @@
 import datetime as dt
 
 from fastapi import Depends, FastAPI, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, noload
 from typing import List
 
 from database import engine, SessionLocal, Base
 from external_requests import CheckCityExisting, GetWeatherRequest
 import models
 import schemas
-from schemas import RegisterUserRequest, UserModel
 
 Base.metadata.create_all(bind=engine)
 
@@ -25,7 +24,7 @@ def get_db():
 
 
 @app.post('/cities/', response_model=schemas.City, summary='Create City',
-          tags=['city'])
+          tags=['cities'])
 def create_city(city: schemas.CityCreate, db: Session = Depends(get_db)):
     """
     Создание города по его названию
@@ -40,17 +39,16 @@ def create_city(city: schemas.CityCreate, db: Session = Depends(get_db)):
         models.City.name == city.name).first()
     if city_object is None:
         city_object = models.City(name=city.name)
-        s = db
-        s.add(city_object)
-        s.commit()
-
+        db.add(city_object)
+        db.commit()
+        db.refresh(city_object)
     return city_object
 
 
 @app.get('/cities/', response_model=List[schemas.City], summary='Get Cities',
-         tags=['city'])
-def read_cities(db: Session = Depends(get_db),
-                q: str = Query(description='Название города', default=None)):
+         tags=['cities'])
+def read_cities(q: str = Query(description='Название города', default=None),
+                db: Session = Depends(get_db)):
     """
     Получение списка городов
     """
@@ -60,48 +58,86 @@ def read_cities(db: Session = Depends(get_db),
     return cities.all()
 
 
-@app.post('/users-list/', summary='')
-def users_list():
-    """
-    Список пользователей
-    """
-    users = db.query(User).all()
-    return [{
-        'id': user.id,
-        'name': user.name,
-        'surname': user.surname,
-        'age': user.age,
-    } for user in users]
-
-
-@app.post('/register-user/', summary='CreateUser', response_model=UserModel)
-def register_user(user: RegisterUserRequest):
+@app.post('/users/', response_model=schemas.User, summary='Create User',
+          tags=['users'])
+def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     """
     Регистрация пользователя
     """
-    user_object = User(**user.dict())
-    s = db
-    s.add(user_object)
-    s.commit()
+    user_object = db.query(models.User).filter(
+        models.User.name == user.name,
+        models.User.surname == user.surname,
+        models.User.age == user.age
+    ).first()
+    if user_object is None:
+        user_object = models.User(**user.dict())
+        db.add(user_object)
+        db.commit()
+        db.refresh(user_object)
+    return user_object
 
-    return UserModel.from_orm(user_object)
 
-
-@app.get('/all-picnics/', summary='All Picnics', tags=['picnic'])
-def all_picnics(datetime: dt.datetime = Query(default=None, description='Время пикника (по умолчанию не задано)'),
-                past: bool = Query(default=True, description='Включая уже прошедшие пикники')):
+@app.get('/users/', response_model=List[schemas.User], summary='Get users',
+         tags=['users'])
+def read_users(
+        min_age: int = Query(description='Минимальный возраст', default=None),
+        max_age: int = Query(description='Максимальный возраст', default=None),
+        db: Session = Depends(get_db)):
     """
-    Список всех пикников
+    Получение списка пользователей
     """
-    picnics = db.query(Picnic)
+    users = db.query(models.User)
+    if min_age:
+        users = users.filter(models.User.age >= min_age)
+    if max_age:
+        users = users.filter(models.User.age <= max_age)
+    return users.all()
+
+
+@app.post('/picnics/', response_model=schemas.Picnic, summary='Add Picnic',
+          tags=['picnics'])
+def picnic_add(picnic: schemas.PicnicCreate, db: Session = Depends(get_db)):
+    """
+    Создание пикника
+    """
+    picnic_object = db.query(models.Picnic).filter(
+        models.Picnic.city_id == picnic.city_id,
+        models.Picnic.time == picnic.time
+    ).first()
+    if picnic_object is None:
+        picnic_object = models.Picnic(**picnic.dict())
+        db.add(picnic_object)
+        db.commit()
+        db.refresh(picnic_object)
+    return picnic_object
+
+
+@app.get('/picnics/', response_model=List[schemas.Picnic],
+         summary='Get Picnics', tags=['picnics'])
+def read_picnics(
+        datetime: dt.datetime = Query(
+            default=None,
+            description='Время пикника (по умолчанию не задано)'),
+        past: bool = Query(
+            default=True,
+            description='Включая уже прошедшие пикники'),
+        db: Session = Depends(get_db)):
+    """
+    Получение списка всех пикников
+    """
+    picnics = db.query(models.Picnic).options(
+        joinedload(models.Picnic.users).options(
+            joinedload(models.PicnicRegistration.user)),
+        joinedload(models.Picnic.city_object))
+
     if datetime is not None:
-        picnics = picnics.filter(Picnic.time == datetime)
+        picnics = picnics.filter(models.Picnic.time == datetime)
     if not past:
-        picnics = picnics.filter(Picnic.time >= dt.datetime.now())
+        picnics = picnics.filter(models.Picnic.time >= dt.datetime.now())
 
     return [{
         'id': pic.id,
-        'city': db.query(City).filter(City.id == pic.id).first().name,
+        'city': pic.city,
         'time': pic.time,
         'users': [
             {
@@ -109,23 +145,8 @@ def all_picnics(datetime: dt.datetime = Query(default=None, description='Вре�
                 'name': pr.user.name,
                 'surname': pr.user.surname,
                 'age': pr.user.age,
-            }
-            for pr in db.query(PicnicRegistration).filter(PicnicRegistration.picnic_id == pic.id)],
+            } for pr in pic.users],
     } for pic in picnics]
-
-
-@app.get('/picnic-add/', summary='Picnic Add', tags=['picnic'])
-def picnic_add(city_id: int = None, datetime: dt.datetime = None):
-    p = Picnic(city_id=city_id, time=datetime)
-    s = db
-    s.add(p)
-    s.commit()
-
-    return {
-        'id': p.id,
-        'city': db.query(City).filter(City.id == p.id).first().name,
-        'time': p.time,
-    }
 
 
 @app.get('/picnic-register/', summary='Picnic Registration', tags=['picnic'])

@@ -1,4 +1,5 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import (Column, DateTime, ForeignKey, Integer, String,
+                        UniqueConstraint)
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -38,6 +39,9 @@ class User(Base):
     surname = Column(String, nullable=False)
     age = Column(Integer, nullable=True)
 
+    __table_args__ = (UniqueConstraint(
+        'name', 'surname', 'age', name='unique user'),)
+
     def __repr__(self):
         return f'<Пользователь {self.surname} {self.name}>'
 
@@ -51,6 +55,15 @@ class Picnic(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     city_id = Column(Integer, ForeignKey('city.id'), nullable=False)
     time = Column(DateTime, nullable=False)
+
+    city_object = relationship('City', backref='picnics')
+
+    @property
+    def city(self) -> str:
+        return self.city_object.name
+
+    __table_args__ = (UniqueConstraint(
+        'city_id', 'time', name='unique picnic'),)
 
     def __repr__(self):
         return f'<Пикник {self.id}>'

@@ -1,4 +1,7 @@
-from pydantic import BaseModel
+from datetime import datetime
+from typing import List
+
+from pydantic import BaseModel, Field
 
 
 class CityBase(BaseModel):
@@ -18,19 +21,39 @@ class City(CityBase):
         orm_mode = True
 
 
-class RegisterUserRequest(BaseModel):
-    # принимает данные. Должен называться UserBase
+class UserBase(BaseModel):
     name: str
     surname: str
     age: int
 
 
-class UserModel(BaseModel):
-    # возврат данных. Надо назвать User и наследовать от UserBase
+class UserCreate(UserBase):
+    pass
+
+
+class User(BaseModel):
     id: int
     name: str
     surname: str
     age: int
+
+    class Config:
+        orm_mode = True
+
+
+class PicnicBase(BaseModel):
+    time: datetime
+
+
+class PicnicCreate(PicnicBase):
+    city_id: int
+
+
+class Picnic(BaseModel):
+    id: int
+    city: str  # метод city() в models.Picnic, возвращает название города
+    time: datetime
+    users: List[User]
 
     class Config:
         orm_mode = True
