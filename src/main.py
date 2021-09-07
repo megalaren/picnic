@@ -1,7 +1,7 @@
 import datetime as dt
 
 from fastapi import Depends, FastAPI, HTTPException, Query
-from sqlalchemy.orm import Session, joinedload, noload
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 
 from database import engine, SessionLocal, Base
@@ -77,7 +77,7 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     return user_object
 
 
-@app.get('/users/', response_model=List[schemas.User], summary='Get users',
+@app.get('/users/', response_model=List[schemas.User], summary='Get Users',
          tags=['users'])
 def read_users(
         min_age: int = Query(description='Минимальный возраст', default=None),
@@ -149,12 +149,20 @@ def read_picnics(
     } for pic in picnics]
 
 
-@app.get('/picnic-register/', summary='Picnic Registration', tags=['picnic'])
-def register_to_picnic(*_, **__,):
+@app.post('/picnics/register/', response_model=schemas.PicnicRegistration,
+          summary='Picnic Registration', tags=['picnics'])
+def register_to_picnic(picnic_reg: schemas.PicnicRegistration,
+                       db: Session = Depends(get_db)):
     """
     Регистрация пользователя на пикник
-    (Этот эндпойнт необходимо реализовать в процессе выполнения тестового задания)
     """
-    # TODO: Сделать логику
-    return ...
-
+    picnic_reg_obj = db.query(models.PicnicRegistration).filter(
+        models.PicnicRegistration.user_id == picnic_reg.user_id,
+        models.PicnicRegistration.picnic_id == picnic_reg.picnic_id,
+    ).first()
+    if picnic_reg_obj is None:
+        picnic_reg_obj = models.PicnicRegistration(**picnic_reg.dict())
+        db.add(picnic_reg_obj)
+        db.commit()
+        db.refresh(picnic_reg_obj)
+    return picnic_reg_obj

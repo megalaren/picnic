@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class CityBase(BaseModel):
@@ -54,6 +54,14 @@ class Picnic(BaseModel):
     city: str  # метод city() в models.Picnic, возвращает название города
     time: datetime
     users: List[User]
+
+    class Config:
+        orm_mode = True
+
+
+class PicnicRegistration(BaseModel):
+    user_id: int
+    picnic_id: int
 
     class Config:
         orm_mode = True

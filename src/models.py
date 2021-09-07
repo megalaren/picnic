@@ -82,5 +82,8 @@ class PicnicRegistration(Base):
     user = relationship('User', backref='picnics')
     picnic = relationship('Picnic', backref='users')
 
+    __table_args__ = (UniqueConstraint(
+        'user_id', 'picnic_id', name='unique registration'),)
+
     def __repr__(self):
         return f'<Регистрация {self.id}>'
