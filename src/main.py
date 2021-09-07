@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List
 
 from database import engine, SessionLocal, Base
-from external_requests import CheckCityExisting, GetWeatherRequest
+from external_requests import CheckCityExisting
 import models
 import schemas
 
@@ -100,8 +100,15 @@ def picnic_add(picnic: schemas.PicnicCreate, db: Session = Depends(get_db)):
     """
     Создание пикника
     """
+    # Проверим наличие города с таким id в базе
+    city_id = picnic.city_id
+    city_obj = db.query(models.City).filter(models.City.id == city_id).first()
+    if city_obj is None:
+        raise HTTPException(
+            status_code=404, detail=f'City with id = {city_id} not found')
+
     picnic_object = db.query(models.Picnic).filter(
-        models.Picnic.city_id == picnic.city_id,
+        models.Picnic.city_id == city_id,
         models.Picnic.time == picnic.time
     ).first()
     if picnic_object is None:
@@ -156,9 +163,22 @@ def register_to_picnic(picnic_reg: schemas.PicnicRegistration,
     """
     Регистрация пользователя на пикник
     """
+    # Проверим наличие пикника и пользователя с такими id в базе
+    user_id = picnic_reg.user_id
+    picnic_id = picnic_reg.picnic_id
+    user_obj = db.query(models.User).filter(models.User.id == user_id).first()
+    if user_obj is None:
+        raise HTTPException(
+            status_code=404, detail=f'User with id = {user_id} not found')
+    picnic_obj = db.query(models.Picnic).filter(
+        models.Picnic.id == picnic_id).first()
+    if picnic_obj is None:
+        raise HTTPException(
+            status_code=404, detail=f'Picnic with id = {picnic_id} not found')
+
     picnic_reg_obj = db.query(models.PicnicRegistration).filter(
-        models.PicnicRegistration.user_id == picnic_reg.user_id,
-        models.PicnicRegistration.picnic_id == picnic_reg.picnic_id,
+        models.PicnicRegistration.user_id == user_id,
+        models.PicnicRegistration.picnic_id == picnic_id,
     ).first()
     if picnic_reg_obj is None:
         picnic_reg_obj = models.PicnicRegistration(**picnic_reg.dict())
