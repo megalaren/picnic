@@ -135,7 +135,7 @@ def read_picnics(
     picnics = db.query(models.Picnic).options(
         joinedload(models.Picnic.users).options(
             joinedload(models.PicnicRegistration.user)),
-        joinedload(models.Picnic.city_object))
+        joinedload(models.Picnic.city_object)).order_by(models.Picnic.time)
 
     if datetime is not None:
         picnics = picnics.filter(models.Picnic.time == datetime)
