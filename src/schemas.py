@@ -15,7 +15,7 @@ class CityCreate(CityBase):
 class City(CityBase):
     """Формирует тело ответа из БД."""
     id: int
-    weather: float
+    weather: float = None
 
     class Config:
         orm_mode = True

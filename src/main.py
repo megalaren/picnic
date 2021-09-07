@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List
 
 from database import engine, SessionLocal, Base
-from external_requests import CheckCityExisting
+from external_requests import Weather
 import models
 import schemas
 
@@ -29,11 +29,11 @@ def create_city(city: schemas.CityCreate, db: Session = Depends(get_db)):
     """
     Создание города по его названию
     """
-    check = CheckCityExisting()
-    if not check.check_existing(city.name):
+    is_existing, detail = Weather().check_existing(city.name)
+    if not is_existing:
         raise HTTPException(
             status_code=400,
-            detail='Параметр city должен быть существующим городом')
+            detail=detail)
 
     city_object = db.query(models.City).filter(
         models.City.name == city.name).first()

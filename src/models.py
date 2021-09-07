@@ -3,7 +3,7 @@ from sqlalchemy import (Column, DateTime, ForeignKey, Integer, String,
 from sqlalchemy.orm import relationship
 
 from database import Base
-from external_requests import GetWeatherRequest
+from external_requests import Weather
 
 
 class City(Base):
@@ -20,9 +20,7 @@ class City(Base):
         """
         Возвращает текущую погоду в этом городе
         """
-        r = GetWeatherRequest()
-        weather = r.get_weather(self.name)
-        return weather
+        return Weather().get_weather(self.name)
 
     def __repr__(self):
         return f'<Город "{self.name}">'
