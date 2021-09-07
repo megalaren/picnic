@@ -29,9 +29,13 @@ class Weather:
         Args:
             url: Адрес запроса
         Returns:
-            'requests.Response' object
+            'requests.Response' object or None
         """
-        return self.session.get(url)
+        try:
+            response = self.session.get(url)
+        except Exception:
+            return None
+        return response
 
     def get_weather(self, city):
         """
@@ -43,7 +47,7 @@ class Weather:
         """
         url = self.get_weather_url(city)
         response = self.send_request(url)
-        if response.status_code != 200:
+        if response is None or response.status_code != 200:
             return None
         # если поменялась схема api сервиса погоды, то вернём None:
         main = response.json().get('main')
@@ -61,6 +65,8 @@ class Weather:
         """
         url = self.get_weather_url(city)
         response = self.send_request(url)
+        if response is None:
+            return False, 'Отсутствует соединение с интернетом'
         if response.status_code == 200:
             return True, 'Ок'
         if response.status_code == 404:
